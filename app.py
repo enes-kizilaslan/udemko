@@ -49,7 +49,7 @@ def load_models():
     models = {}
     model_names = [
         'RandomForest', 'LogisticRegression', 'SVC', 'KNN',
-        'GradientBoosting', 'DecisionTree', 'CatBoost', 'LightGBM'
+        'GradientBoosting', 'DecisionTree'
     ]
     
     for name in model_names:
