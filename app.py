@@ -104,25 +104,32 @@ elif st.session_state.page == 'analyzing':
 elif st.session_state.page == 'results':
     st.title("Sonuçlar")
     
+    # Debug bilgisi
+    st.write("Debug - Ham Sonuçlar:")
+    for lbl, val in st.session_state.results.items():
+        st.write(f"{lbl}: {val}")
+    
     # Sonuçları göster
     has_issues = False
-    for lbl,val in st.session_state.results.items():
-        if val:
+    for lbl, val in st.session_state.results.items():
+        if not val:  # val False ise sorun var demektir
             has_issues = True
-            st.write(f"{lbl}: {'✅' if val else '❌'}")
+            st.write(f"{lbl}: ❌")
+        else:
+            st.write(f"{lbl}: ✅")
 
     if not has_issues:
         st.success("Herşey yolunda görünüyor. Harika! 😊")
     else:
         # Yanlış yapılan sorular
         st.subheader("Yanlış Yapılan Sorular")
-        for lbl,val in st.session_state.results.items():
-            if val:
-                pool=set()
+        for lbl, val in st.session_state.results.items():
+            if not val:  # val False ise sorun var demektir
+                pool = set()
                 for m in models:
                     if m.endswith(lbl):
                         pool |= set(cfg.loc[m,"Selected_Questions"].split(','))
-                wrongs=[q for q in pool if not st.session_state.answers[q.strip()]]
+                wrongs = [q for q in pool if not st.session_state.answers[q.strip()]]
                 st.write(f"**{lbl}**: {', '.join(wrongs) or 'Yok'}")
 
     # Ana sayfaya dön butonu
