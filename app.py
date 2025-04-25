@@ -12,6 +12,11 @@ import pandas as pd
 import numpy as np
 import glob
 from joblib import load
+import random
+import time
+
+# Sayfa yapılandırması
+st.set_page_config(page_title="Gelişimsel Tarama Testi", layout="wide")
 
 # 1) Otomatik tüm modelleri yükle
 model_paths = glob.glob('models/*.pkl')
@@ -27,30 +32,62 @@ QUESTION_POOL = ['Q2','Q4','Q8','Q9','Q13','Q14','Q16','Q18','Q19','Q20','Q21','
     'Q226','Q227','Q229','Q230','Q231','Q232','Q233','Q234','Q235','Q236','Q239','Q241',
     'Q242','Q243','Q249','Q252','Q253']
 
-
 # 3) Meta veriler
 perf     = pd.read_excel("model_performance.xlsx")
 sel_feat = pd.read_excel("selected_features.xlsx")
 cfg = sel_feat.merge(perf, on="Model").set_index("Model")
 
-# 4) UI
-st.title("Gelişimsel Tarama Testi")
-st.write("Her soruya Evet/Hayır ile yanıt verin:")
+# Sayfa durumunu yönet
+if 'page' not in st.session_state:
+    st.session_state.page = 'questions'
+if 'results' not in st.session_state:
+    st.session_state.results = None
 
-answers = {}
-for q in QUESTION_POOL:
-    answers[q] = (st.radio(q, ["Evet","Hayır"])=="Evet")
+# Rastgele cevaplama fonksiyonu
+def randomize_answers():
+    return {q: random.choice([True, False]) for q in QUESTION_POOL}
 
-if st.button("Tahmin Et"):
-    # 5) Her modelden tahmin al ve ağırlığını hazırla
+# Ana sayfa
+if st.session_state.page == 'questions':
+    st.title("Gelişimsel Tarama Testi")
+    st.write("Her soruya Evet/Hayır ile yanıt verin:")
+
+    # Rastgele cevaplama butonu
+    if st.button("Rastgele Cevapla"):
+        st.session_state.answers = randomize_answers()
+        st.experimental_rerun()
+
+    answers = {}
+    for q in QUESTION_POOL:
+        if 'answers' in st.session_state and q in st.session_state.answers:
+            answers[q] = st.session_state.answers[q]
+        else:
+            answers[q] = (st.radio(q, ["Evet","Hayır"])=="Evet")
+
+    if st.button("Tahmin Et"):
+        st.session_state.answers = answers
+        st.session_state.page = 'analyzing'
+        st.experimental_rerun()
+
+# Analiz sayfası
+elif st.session_state.page == 'analyzing':
+    st.title("Analiz Yapılıyor")
+    st.write("Lütfen bekleyin, sonuçlarınız analiz ediliyor...")
+    
+    # Analiz simülasyonu
+    progress_bar = st.progress(0)
+    for i in range(100):
+        time.sleep(0.05)
+        progress_bar.progress(i + 1)
+    
+    # Tahminleri hesapla
     preds, wts = {}, {}
     for name, clf in models.items():
         feats = [f.strip() for f in cfg.loc[name,"Selected_Questions"].split(',')]
-        X = np.array([[answers[f] for f in feats]], dtype=int)
+        X = np.array([[st.session_state.answers[f] for f in feats]], dtype=int)
         preds[name] = clf.predict(X)[0]
         wts[name]   = (cfg.loc[name,"Train_F1"] + cfg.loc[name,"Test_F1"])/2
 
-    # 6) Etiket başına ağırlıklı oylama
     results = {}
     for label in set(name.split('_',2)[2] for name in models):
         ms = [m for m in preds if m.endswith(label)]
@@ -59,18 +96,38 @@ if st.button("Tahmin Et"):
         score  = (votes*weights).sum()/weights.sum()
         results[label] = score>=0.5
 
-    # 7) Sonuçları göster
-    st.subheader("Sonuçlar")
-    for lbl,val in results.items():
-        st.write(f"{lbl}: {'✅' if val else '❌'}")
+    st.session_state.results = results
+    st.session_state.page = 'results'
+    st.experimental_rerun()
 
-    # 8) Açıklanabilirlik
-    st.subheader("Yanlış Yapılan Sorular")
-    for lbl,val in results.items():
+# Sonuçlar sayfası
+elif st.session_state.page == 'results':
+    st.title("Sonuçlar")
+    
+    # Sonuçları göster
+    has_issues = False
+    for lbl,val in st.session_state.results.items():
         if val:
-            pool=set()
-            for m in models:
-                if m.endswith(lbl):
-                    pool |= set(cfg.loc[m,"Selected_Questions"].split(','))
-            wrongs=[q for q in pool if not answers[q.strip()]]
-            st.write(f"**{lbl}**: {', '.join(wrongs) or 'Yok'}")
+            has_issues = True
+            st.write(f"{lbl}: {'✅' if val else '❌'}")
+
+    if not has_issues:
+        st.success("Herşey yolunda görünüyor. Harika! 😊")
+    else:
+        # Yanlış yapılan sorular
+        st.subheader("Yanlış Yapılan Sorular")
+        for lbl,val in st.session_state.results.items():
+            if val:
+                pool=set()
+                for m in models:
+                    if m.endswith(lbl):
+                        pool |= set(cfg.loc[m,"Selected_Questions"].split(','))
+                wrongs=[q for q in pool if not st.session_state.answers[q.strip()]]
+                st.write(f"**{lbl}**: {', '.join(wrongs) or 'Yok'}")
+
+    # Ana sayfaya dön butonu
+    if st.button("Yeni Test Başlat"):
+        st.session_state.page = 'questions'
+        st.session_state.results = None
+        st.session_state.answers = None
+        st.experimental_rerun()
