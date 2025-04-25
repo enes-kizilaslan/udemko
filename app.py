@@ -24,7 +24,7 @@ if 'page' not in st.session_state:
 if 'results' not in st.session_state:
     st.session_state.results = None
 if 'answers' not in st.session_state:
-    st.session_state.answers = None
+    st.session_state.answers = {}
 
 # 1) Otomatik tüm modelleri yükle
 model_paths = glob.glob('models/*.pkl')
@@ -51,8 +51,8 @@ def randomize_answers():
 
 # Yeni test başlatma fonksiyonu
 def start_new_test():
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
+    st.session_state.answers = {}
+    st.session_state.results = None
     st.session_state.page = 'questions'
     st.rerun()
 
@@ -66,15 +66,16 @@ if st.session_state.page == 'questions':
         st.session_state.answers = randomize_answers()
         st.rerun()
 
-    answers = {}
+    # Soruları göster ve cevapları kaydet
     for q in QUESTION_POOL:
-        if 'answers' in st.session_state and q in st.session_state.answers:
-            answers[q] = st.session_state.answers[q]
+        if q in st.session_state.answers:
+            # Eğer cevap varsa, radio butonunu o değerle göster
+            st.session_state.answers[q] = (st.radio(q, ["Evet","Hayır"], index=1 if st.session_state.answers[q] else 0)=="Evet")
         else:
-            answers[q] = (st.radio(q, ["Evet","Hayır"])=="Evet")
+            # Eğer cevap yoksa, yeni bir radio butonu oluştur
+            st.session_state.answers[q] = (st.radio(q, ["Evet","Hayır"])=="Evet")
 
     if st.button("Tahmin Et"):
-        st.session_state.answers = answers
         st.session_state.page = 'analyzing'
         st.rerun()
 
