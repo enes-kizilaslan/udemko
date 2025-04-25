@@ -30,12 +30,14 @@ if 'answers' not in st.session_state:
 # 1) Otomatik tüm modelleri yükle
 st.write("Debug - Model Yükleme:")
 
-# Mutlak yol kullanarak model dosyalarını bul
-current_dir = os.path.dirname(os.path.abspath(__file__))
-models_dir = os.path.join(current_dir, 'models')
-model_paths = [os.path.join(models_dir, f) for f in os.listdir(models_dir) if f.endswith('.pkl')]
-
+# Streamlit Community Cloud için model dosyalarını bul
+model_paths = glob.glob('models/*.pkl')
 st.write(f"Bulunan model dosyaları: {model_paths}")
+
+if not model_paths:
+    st.error("Model dosyaları bulunamadı! Lütfen models klasörünün doğru konumda olduğundan emin olun.")
+    st.stop()
+
 models = {}
 for p in model_paths:
     try:
@@ -44,6 +46,10 @@ for p in model_paths:
         st.write(f"Model yüklendi: {model_name}")
     except Exception as e:
         st.write(f"Hata: {model_name} yüklenirken hata oluştu: {str(e)}")
+
+if not models:
+    st.error("Hiçbir model yüklenemedi! Lütfen model dosyalarının doğru formatta olduğundan emin olun.")
+    st.stop()
 
 # 2) Soru havuzunu tanımla (95 soru)
 QUESTION_POOL = ['Q2','Q4','Q8','Q9','Q13','Q14','Q16','Q18','Q19','Q20','Q21','Q25','Q26','Q28','Q29',
