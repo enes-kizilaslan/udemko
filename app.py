@@ -14,6 +14,7 @@ import glob
 from joblib import load
 import random
 import time
+import os
 
 # Sayfa yapılandırması
 st.set_page_config(page_title="Gelişimsel Tarama Testi", layout="wide")
@@ -28,12 +29,17 @@ if 'answers' not in st.session_state:
 
 # 1) Otomatik tüm modelleri yükle
 st.write("Debug - Model Yükleme:")
-model_paths = glob.glob('models/*.pkl')
+
+# Mutlak yol kullanarak model dosyalarını bul
+current_dir = os.path.dirname(os.path.abspath(__file__))
+models_dir = os.path.join(current_dir, 'models')
+model_paths = [os.path.join(models_dir, f) for f in os.listdir(models_dir) if f.endswith('.pkl')]
+
 st.write(f"Bulunan model dosyaları: {model_paths}")
 models = {}
 for p in model_paths:
     try:
-        model_name = p.split('/')[-1][:-4]
+        model_name = os.path.basename(p)[:-4]  # .pkl uzantısını kaldır
         models[model_name] = load(p)
         st.write(f"Model yüklendi: {model_name}")
     except Exception as e:
