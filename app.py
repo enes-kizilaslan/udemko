@@ -55,7 +55,7 @@ if st.session_state.page == 'questions':
     # Rastgele cevaplama butonu
     if st.button("Rastgele Cevapla"):
         st.session_state.answers = randomize_answers()
-        st.experimental_rerun()
+        st.rerun()
 
     answers = {}
     for q in QUESTION_POOL:
@@ -67,7 +67,7 @@ if st.session_state.page == 'questions':
     if st.button("Tahmin Et"):
         st.session_state.answers = answers
         st.session_state.page = 'analyzing'
-        st.experimental_rerun()
+        st.rerun()
 
 # Analiz sayfası
 elif st.session_state.page == 'analyzing':
@@ -98,7 +98,7 @@ elif st.session_state.page == 'analyzing':
 
     st.session_state.results = results
     st.session_state.page = 'results'
-    st.experimental_rerun()
+    st.rerun()
 
 # Sonuçlar sayfası
 elif st.session_state.page == 'results':
@@ -130,4 +130,4 @@ elif st.session_state.page == 'results':
         st.session_state.page = 'questions'
         st.session_state.results = None
         st.session_state.answers = None
-        st.experimental_rerun()
+        st.rerun()
