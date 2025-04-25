@@ -27,8 +27,17 @@ if 'answers' not in st.session_state:
     st.session_state.answers = {}
 
 # 1) Otomatik tüm modelleri yükle
+st.write("Debug - Model Yükleme:")
 model_paths = glob.glob('models/*.pkl')
-models = {p.split('/')[-1][:-4]: load(p) for p in model_paths}
+st.write(f"Bulunan model dosyaları: {model_paths}")
+models = {}
+for p in model_paths:
+    try:
+        model_name = p.split('/')[-1][:-4]
+        models[model_name] = load(p)
+        st.write(f"Model yüklendi: {model_name}")
+    except Exception as e:
+        st.write(f"Hata: {model_name} yüklenirken hata oluştu: {str(e)}")
 
 # 2) Soru havuzunu tanımla (95 soru)
 QUESTION_POOL = ['Q2','Q4','Q8','Q9','Q13','Q14','Q16','Q18','Q19','Q20','Q21','Q25','Q26','Q28','Q29',
@@ -41,9 +50,16 @@ QUESTION_POOL = ['Q2','Q4','Q8','Q9','Q13','Q14','Q16','Q18','Q19','Q20','Q21','
     'Q242','Q243','Q249','Q252','Q253']
 
 # 3) Meta veriler
-perf     = pd.read_excel("model_performance.xlsx")
-sel_feat = pd.read_excel("selected_features.xlsx")
-cfg = sel_feat.merge(perf, on="Model").set_index("Model")
+st.write("\nDebug - Meta Veriler:")
+try:
+    perf = pd.read_excel("model_performance.xlsx")
+    st.write("model_performance.xlsx yüklendi")
+    sel_feat = pd.read_excel("selected_features.xlsx")
+    st.write("selected_features.xlsx yüklendi")
+    cfg = sel_feat.merge(perf, on="Model").set_index("Model")
+    st.write("Meta veriler birleştirildi")
+except Exception as e:
+    st.write(f"Hata: Meta veriler yüklenirken hata oluştu: {str(e)}")
 
 # Rastgele cevaplama fonksiyonu
 def randomize_answers():
@@ -114,47 +130,14 @@ elif st.session_state.page == 'analyzing':
 elif st.session_state.page == 'results':
     st.title("Sonuçlar")
     
-    # Debug bilgisi - Ham model çıktıları
-    st.write("Debug - Ham Model Çıktıları:")
-    for name, clf in models.items():
-        feats = [f.strip() for f in cfg.loc[name,"Selected_Questions"].split(',')]
-        X = np.array([[st.session_state.answers[f] for f in feats]], dtype=int)
-        pred = clf.predict(X)[0]
-        st.write(f"{name}: {pred}")
+    # Debug bilgisi
+    st.write("Debug - Ham Sonuçlar:")
+    for lbl, val in st.session_state.results.items():
+        st.write(f"{lbl}: {val}")
     
-    # Debug bilgisi - Ağırlıklı oylama
-    st.write("\nDebug - Ağırlıklı Oylama:")
-    for label in set(name.split('_',2)[2] for name in models):
-        ms = [m for m in models if m.endswith(label)]
-        st.write(f"\n{label} için modeller:")
-        for m in ms:
-            feats = [f.strip() for f in cfg.loc[m,"Selected_Questions"].split(',')]
-            X = np.array([[st.session_state.answers[f] for f in feats]], dtype=int)
-            pred = models[m].predict(X)[0]
-            wt = (cfg.loc[m,"Train_F1"] + cfg.loc[m,"Test_F1"])/2
-            st.write(f"  {m}: Tahmin={pred}, Ağırlık={wt:.3f}")
-    
-    # Tahminleri hesapla
-    preds, wts = {}, {}
-    for name, clf in models.items():
-        feats = [f.strip() for f in cfg.loc[name,"Selected_Questions"].split(',')]
-        X = np.array([[st.session_state.answers[f] for f in feats]], dtype=int)
-        preds[name] = clf.predict(X)[0]
-        wts[name]   = (cfg.loc[name,"Train_F1"] + cfg.loc[name,"Test_F1"])/2
-
-    results = {}
-    for label in set(name.split('_',2)[2] for name in models):
-        ms = [m for m in preds if m.endswith(label)]
-        votes  = np.array([preds[m] for m in ms])
-        weights= np.array([wts[m]    for m in ms])
-        score  = (votes*weights).sum()/weights.sum()
-        results[label] = score>=0.5
-        st.write(f"\n{label} için final skor: {score:.3f}")
-
     # Sonuçları göster
-    st.write("\nFinal Sonuçlar:")
     has_issues = False
-    for lbl, val in results.items():
+    for lbl, val in st.session_state.results.items():
         if not val:  # val False ise sorun var demektir
             has_issues = True
             st.write(f"{lbl}: ❌")
@@ -166,7 +149,7 @@ elif st.session_state.page == 'results':
     else:
         # Yanlış yapılan sorular
         st.subheader("Yanlış Yapılan Sorular")
-        for lbl, val in results.items():
+        for lbl, val in st.session_state.results.items():
             if not val:  # val False ise sorun var demektir
                 pool = set()
                 for m in models:
