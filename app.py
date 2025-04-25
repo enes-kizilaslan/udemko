@@ -114,14 +114,47 @@ elif st.session_state.page == 'analyzing':
 elif st.session_state.page == 'results':
     st.title("Sonuçlar")
     
-    # Debug bilgisi
-    st.write("Debug - Ham Sonuçlar:")
-    for lbl, val in st.session_state.results.items():
-        st.write(f"{lbl}: {val}")
+    # Debug bilgisi - Ham model çıktıları
+    st.write("Debug - Ham Model Çıktıları:")
+    for name, clf in models.items():
+        feats = [f.strip() for f in cfg.loc[name,"Selected_Questions"].split(',')]
+        X = np.array([[st.session_state.answers[f] for f in feats]], dtype=int)
+        pred = clf.predict(X)[0]
+        st.write(f"{name}: {pred}")
     
+    # Debug bilgisi - Ağırlıklı oylama
+    st.write("\nDebug - Ağırlıklı Oylama:")
+    for label in set(name.split('_',2)[2] for name in models):
+        ms = [m for m in models if m.endswith(label)]
+        st.write(f"\n{label} için modeller:")
+        for m in ms:
+            feats = [f.strip() for f in cfg.loc[m,"Selected_Questions"].split(',')]
+            X = np.array([[st.session_state.answers[f] for f in feats]], dtype=int)
+            pred = models[m].predict(X)[0]
+            wt = (cfg.loc[m,"Train_F1"] + cfg.loc[m,"Test_F1"])/2
+            st.write(f"  {m}: Tahmin={pred}, Ağırlık={wt:.3f}")
+    
+    # Tahminleri hesapla
+    preds, wts = {}, {}
+    for name, clf in models.items():
+        feats = [f.strip() for f in cfg.loc[name,"Selected_Questions"].split(',')]
+        X = np.array([[st.session_state.answers[f] for f in feats]], dtype=int)
+        preds[name] = clf.predict(X)[0]
+        wts[name]   = (cfg.loc[name,"Train_F1"] + cfg.loc[name,"Test_F1"])/2
+
+    results = {}
+    for label in set(name.split('_',2)[2] for name in models):
+        ms = [m for m in preds if m.endswith(label)]
+        votes  = np.array([preds[m] for m in ms])
+        weights= np.array([wts[m]    for m in ms])
+        score  = (votes*weights).sum()/weights.sum()
+        results[label] = score>=0.5
+        st.write(f"\n{label} için final skor: {score:.3f}")
+
     # Sonuçları göster
+    st.write("\nFinal Sonuçlar:")
     has_issues = False
-    for lbl, val in st.session_state.results.items():
+    for lbl, val in results.items():
         if not val:  # val False ise sorun var demektir
             has_issues = True
             st.write(f"{lbl}: ❌")
@@ -133,7 +166,7 @@ elif st.session_state.page == 'results':
     else:
         # Yanlış yapılan sorular
         st.subheader("Yanlış Yapılan Sorular")
-        for lbl, val in st.session_state.results.items():
+        for lbl, val in results.items():
             if not val:  # val False ise sorun var demektir
                 pool = set()
                 for m in models:
