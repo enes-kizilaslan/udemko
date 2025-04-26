@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
+import sys, numpy
+sys.modules['numpy._core'] = numpy.core
 import pickle
 import random
 from pathlib import Path
