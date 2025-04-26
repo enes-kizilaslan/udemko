@@ -16,167 +16,143 @@ import random
 import time
 import os
 import zipfile
+from utils import load_models, load_feature_lists, load_model_performances, prepare_input_data, make_predictions
 
 # Sayfa yapılandırması
-st.set_page_config(page_title="Gelişimsel Tarama Testi", layout="wide")
+st.set_page_config(
+    page_title="Nörogelişimsel Bozukluk Tarama Sistemi",
+    page_icon="🧠",
+    layout="wide"
+)
+
+# CSS stilleri
+st.markdown("""
+<style>
+    .main {
+        padding: 2rem;
+    }
+    .stButton > button {
+        width: 100%;
+        margin-top: 1rem;
+    }
+    .result-box {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
+    }
+    .high-risk {
+        background-color: rgba(255, 0, 0, 0.1);
+        border: 1px solid red;
+    }
+    .medium-risk {
+        background-color: rgba(255, 165, 0, 0.1);
+        border: 1px solid orange;
+    }
+    .low-risk {
+        background-color: rgba(0, 255, 0, 0.1);
+        border: 1px solid green;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Başlık
+st.title("🧠 Nörogelişimsel Bozukluk Tarama Sistemi")
 
 # Session state başlatma
-if 'page' not in st.session_state:
-    st.session_state.page = 'questions'
-if 'results' not in st.session_state:
-    st.session_state.results = None
-if 'answers' not in st.session_state:
-    st.session_state.answers = {}
-
-# 1) Modelleri zip dosyasından çıkart ve yükle
-st.write("Debug - Model Yükleme:")
-
-# Zip dosyasından modelleri çıkart
-if not os.path.exists('models'):
-    os.makedirs('models')
-    with zipfile.ZipFile('models.zip', 'r') as zip_ref:
-        zip_ref.extractall('models')
-
-# Model dosyalarını bul
-model_paths = glob.glob('models/*.pkl')
-st.write(f"Bulunan model dosyaları: {model_paths}")
-
-if not model_paths:
-    st.error("Model dosyaları bulunamadı! Lütfen models.zip dosyasının doğru konumda olduğundan emin olun.")
-    st.stop()
-
-# Sadece desteklenen model tiplerini yükle
-SUPPORTED_TYPES = ['LogisticRegression', 'DecisionTree', 'RandomForest', 'AdaBoost', 'SVM', 'KNN']
-
-models = {}
-for p in model_paths:
+if 'models' not in st.session_state:
     try:
-        model_name = os.path.basename(p)[:-4]  # .pkl uzantısını kaldır
-        # Sadece desteklenen model tiplerini yükle
-        if any(t in model_name for t in SUPPORTED_TYPES):
-            models[model_name] = load(p)
-            st.write(f"Model yüklendi: {model_name}")
+        st.session_state.models = load_models()
+        st.session_state.feature_lists = load_feature_lists()
+        st.session_state.performances = load_model_performances()
+        st.session_state.questions_df = pd.read_csv("cevaplar600.csv")
     except Exception as e:
-        st.write(f"Hata: {model_name} yüklenirken hata oluştu: {str(e)}")
+        st.error(f"Dosyalar yüklenirken hata oluştu: {str(e)}")
+        st.stop()
 
-if not models:
-    st.error("Hiçbir model yüklenemedi! Lütfen model dosyalarının doğru formatta olduğundan emin olun.")
-    st.stop()
-
-# 2) Soru havuzunu tanımla (95 soru)
-QUESTION_POOL = ['Q2','Q4','Q8','Q9','Q13','Q14','Q16','Q18','Q19','Q20','Q21','Q25','Q26','Q28','Q29',
-    'Q33','Q34','Q35','Q40','Q44','Q45','Q47','Q51','Q52','Q53','Q54','Q60','Q62','Q67',
-    'Q71','Q77','Q81','Q82','Q86','Q89','Q93','Q95','Q96','Q105','Q108','Q115','Q116',
-    'Q117','Q119','Q125','Q126','Q127','Q128','Q129','Q130','Q133','Q138','Q139','Q140',
-    'Q144','Q151','Q158','Q159','Q163','Q166','Q174','Q179','Q184','Q185','Q187','Q192',
-    'Q197','Q202','Q203','Q204','Q205','Q210','Q212','Q215','Q219','Q221','Q222','Q224',
-    'Q226','Q227','Q229','Q230','Q231','Q232','Q233','Q234','Q235','Q236','Q239','Q241',
-    'Q242','Q243','Q249','Q252','Q253']
-
-# 3) Meta veriler
-st.write("\nDebug - Meta Veriler:")
-try:
-    perf = pd.read_excel("model_performance.xlsx")
-    st.write("model_performance.xlsx yüklendi")
-    sel_feat = pd.read_excel("selected_features.xlsx")
-    st.write("selected_features.xlsx yüklendi")
-    cfg = sel_feat.merge(perf, on="Model").set_index("Model")
-    st.write("Meta veriler birleştirildi")
-except Exception as e:
-    st.write(f"Hata: Meta veriler yüklenirken hata oluştu: {str(e)}")
-
-# Rastgele cevaplama fonksiyonu
-def randomize_answers():
-    return {q: random.choice([True, False]) for q in QUESTION_POOL}
-
-# Yeni test başlatma fonksiyonu
-def start_new_test():
-    st.session_state.answers = {}
-    st.session_state.results = None
-    st.session_state.page = 'questions'
-    st.rerun()
-
-# Ana sayfa
-if st.session_state.page == 'questions':
-    st.title("Gelişimsel Tarama Testi")
-    st.write("Her soruya Evet/Hayır ile yanıt verin:")
-
-    # Rastgele cevaplama butonu
-    if st.button("Rastgele Cevapla"):
-        st.session_state.answers = randomize_answers()
-        st.rerun()
-
-    # Soruları göster ve cevapları kaydet
-    for q in QUESTION_POOL:
-        if q in st.session_state.answers:
-            # Eğer cevap varsa, radio butonunu o değerle göster
-            st.session_state.answers[q] = (st.radio(q, ["Evet","Hayır"], index=1 if st.session_state.answers[q] else 0)=="Evet")
-        else:
-            # Eğer cevap yoksa, yeni bir radio butonu oluştur
-            st.session_state.answers[q] = (st.radio(q, ["Evet","Hayır"])=="Evet")
-
-    if st.button("Tahmin Et"):
-        st.session_state.page = 'analyzing'
-        st.rerun()
-
-# Analiz sayfası
-elif st.session_state.page == 'analyzing':
-    st.title("Analiz Yapılıyor")
-    st.write("Lütfen bekleyin, sonuçlarınız analiz ediliyor...")
+# Yan panel - Kullanım bilgileri
+with st.sidebar:
+    st.header("📋 Kullanım Bilgileri")
+    st.markdown("""
+    1. Soruları dikkatlice okuyun
+    2. Her soru için en uygun cevabı seçin
+    3. Tüm soruları yanıtladıktan sonra 'Değerlendir' butonuna tıklayın
+    4. Sistem size risk değerlendirmesini gösterecektir
     
-    # Analiz simülasyonu
-    progress_bar = st.progress(0)
-    for i in range(100):
-        time.sleep(0.05)
-        progress_bar.progress(i + 1)
+    **Not:** Bu sistem bir ön değerlendirme aracıdır ve kesin tanı koyamaz. 
+    Mutlaka bir uzmana danışınız.
+    """)
     
-    # Tahminleri hesapla
-    preds, wts = {}, {}
-    for name, clf in models.items():
-        feats = [f.strip() for f in cfg.loc[name,"Selected_Questions"].split(',')]
-        X = np.array([[st.session_state.answers[f] for f in feats]], dtype=int)
-        preds[name] = clf.predict(X)[0]
-        wts[name] = (cfg.loc[name,"Train_F1"] + cfg.loc[name,"Test_F1"])/2
+    st.markdown("---")
+    st.markdown("### 🎯 Risk Seviyeleri")
+    st.markdown("""
+    - 🔴 Yüksek Risk: > 75%
+    - 🟡 Orta Risk: 50-75%
+    - 🟢 Düşük Risk: < 50%
+    """)
 
-    results = {}
-    for label in set(name.split('_',2)[2] for name in models):
-        ms = [m for m in preds if m.endswith(label)]
-        votes = np.array([preds[m] for m in ms])
-        weights = np.array([wts[m] for m in ms])
-        score = (votes*weights).sum()/weights.sum()
-        results[label] = score>=0.5
+# Ana panel - Sorular
+st.header("📝 Değerlendirme Formu")
 
-    st.session_state.results = results
-    st.session_state.page = 'results'
-    st.rerun()
-
-# Sonuçlar sayfası
-elif st.session_state.page == 'results':
-    st.title("Sonuçlar")
+# Soruları göster
+user_answers = {}
+for _, row in st.session_state.questions_df.iterrows():
+    question_id = row['ID']
+    question_text = row['Soru']
     
-    # Sonuçları göster
-    has_issues = False
-    for lbl, val in st.session_state.results.items():
-        if not val:  # val False ise sorun var demektir
-            has_issues = True
-            st.write(f"{lbl}: ❌")
-        else:
-            st.write(f"{lbl}: ✅")
+    # Her soru için radio buton oluştur
+    answer = st.radio(
+        f"**{question_id}. {question_text}**",
+        options=["Hiçbir Zaman", "Bazen", "Sık Sık", "Her Zaman"],
+        horizontal=True,
+        key=f"q_{question_id}"
+    )
+    
+    # Cevabı sayısal değere çevir
+    user_answers[question_id] = {"Hiçbir Zaman": 0, "Bazen": 1, "Sık Sık": 2, "Her Zaman": 3}[answer]
+    
+    st.markdown("---")
 
-    if not has_issues:
-        st.success("Herşey yolunda görünüyor. Harika! 😊")
-    else:
-        # Yanlış yapılan sorular
-        st.subheader("Yanlış Yapılan Sorular")
-        for lbl, val in st.session_state.results.items():
-            if not val:  # val False ise sorun var demektir
-                pool = set()
-                for m in models:
-                    if m.endswith(lbl):
-                        pool |= set(cfg.loc[m,"Selected_Questions"].split(','))
-                wrongs = [q for q in pool if not st.session_state.answers[q.strip()]]
-                st.write(f"**{lbl}**: {', '.join(wrongs) or 'Yok'}")
-
-    # Ana sayfaya dön butonu
-    if st.button("Yeni Test Başlat"):
-        start_new_test()
+# Değerlendirme butonu
+if st.button("💫 Değerlendir", type="primary"):
+    with st.spinner("Değerlendirme yapılıyor..."):
+        try:
+            # Verileri hazırla ve tahmin yap
+            prepared_data = prepare_input_data(user_answers, st.session_state.feature_lists)
+            predictions = make_predictions(
+                st.session_state.models,
+                prepared_data,
+                st.session_state.performances
+            )
+            
+            # Sonuçları göster
+            st.header("🎯 Değerlendirme Sonuçları")
+            
+            for disease, prob in predictions.items():
+                # Risk seviyesini belirle
+                if prob > 0.75:
+                    risk_class = "high-risk"
+                    risk_text = "Yüksek Risk 🔴"
+                elif prob > 0.50:
+                    risk_class = "medium-risk"
+                    risk_text = "Orta Risk 🟡"
+                else:
+                    risk_class = "low-risk"
+                    risk_text = "Düşük Risk 🟢"
+                
+                # Sonucu göster
+                st.markdown(f"""
+                <div class="{risk_class} result-box">
+                    <h3>{disease}</h3>
+                    <p><b>Risk Seviyesi:</b> {risk_text}</p>
+                    <p><b>Risk Oranı:</b> {prob:.1%}</p>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Uyarı notu
+            st.warning("""
+            ⚠️ **Önemli Not:** Bu sonuçlar sadece bir ön değerlendirmedir ve kesin tanı yerine geçmez. 
+            Lütfen detaylı değerlendirme için bir uzmana başvurunuz.
+            """)
+            
+        except Exception as e:
+            st.error(f"Değerlendirme sırasında bir hata oluştu: {str(e)}")

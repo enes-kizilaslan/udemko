@@ -1,69 +1,55 @@
-# UDEMKO - Gelişim ve Bozukluk Tahmin Paneli
+# Nörogelişimsel Bozukluk Tarama Sistemi
 
-15-18 aylık çocukların gelişimsel durumlarını ve olası zihinsel bozukluk risklerini değerlendiren bir tahmin paneli.
+Bu proje, çocuklarda nörogelişimsel bozuklukların erken tespiti için geliştirilmiş bir tarama sistemidir.
 
-## Proje Yapısı
+## 🚀 Özellikler
 
-```
-udemko/
-├── data/                  # Veri dosyaları
-├── models/               # Eğitilmiş modeller
-├── notebooks/            # Jupyter notebook'lar
-├── src/                  # Kaynak kodlar
-│   ├── data_processing.py
-│   └── model_training.py
-├── app/                  # Streamlit uygulaması
-│   └── app.py
-├── requirements.txt      # Bağımlılıklar
-└── README.md
-```
+- 145 farklı makine öğrenmesi modeli
+- Çoklu nörogelişimsel bozukluk taraması
+- Kullanıcı dostu arayüz
+- Anlık risk değerlendirmesi
+- Detaylı sonuç raporlama
 
-## Kurulum
+## 📦 Gerekli Dosyalar
 
-1. Gerekli paketleri yükleyin:
+Uygulamanın çalışması için aşağıdaki dosyaların proje dizininde bulunması gerekir:
+
+1. `models.zip` - Eğitilmiş modelleri içeren zip dosyası
+2. `cevaplar600.csv` - Soru havuzu
+3. `model_performance.xlsx` - Model performans metrikleri
+4. `selected_features.xlsx` - Her model için seçilmiş özellikler
+
+## 🛠️ Kurulum
+
+1. Gerekli Python paketlerini yükleyin:
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Modelleri eğitin:
+2. Streamlit uygulamasını başlatın:
 ```bash
-python train_models.py
+streamlit run app.py
 ```
 
-3. Uygulamayı başlatın:
-```bash
-streamlit run app/app.py
-```
+## 📝 Kullanım
 
-## Kullanım
+1. Tüm soruları dikkatlice okuyun
+2. Her soru için en uygun cevabı seçin
+3. Tüm soruları yanıtladıktan sonra "Değerlendir" butonuna tıklayın
+4. Sistem size risk değerlendirmesini gösterecektir
 
-1. Streamlit arayüzünde bir model seçin
-2. Soruları yanıtlayın
-3. "Tahmin Yap" butonuna tıklayın
-4. Sonuçları ve beceri analizini inceleyin
+## ⚠️ Önemli Not
 
-## Özellikler
+Bu sistem bir ön değerlendirme aracıdır ve kesin tanı koyamaz. Mutlaka bir uzmana danışınız.
 
-- 8 farklı makine öğrenmesi modeli
-- 30 önemli soru seçimi
-- Gelişimsel beceri analizi
-- Görselleştirmeler (radar chart, olasılık dağılımı)
-- Kullanıcı dostu arayüz
+## 🔧 Teknik Detaylar
 
-## Veri Seti
+- Python 3.8+
+- Streamlit 1.22.0
+- scikit-learn 0.24.2
+- numpy 1.21.6
+- pandas 1.5.3
 
-- 253 gelişimsel soru
-- 300 çocuk verisi
-- 6 farklı beceri alanı
-- Risk durumu etiketleri
+## 📄 Lisans
 
-## Modeller
-
-- Random Forest
-- Logistic Regression
-- Support Vector Machine
-- K-Nearest Neighbors
-- Gradient Boosting
-- Decision Tree
-- CatBoost
-- LightGBM 
+Bu proje MIT lisansı altında lisanslanmıştır. 
