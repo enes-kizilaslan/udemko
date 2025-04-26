@@ -5,7 +5,7 @@ import numpy as np
 from typing import Dict, List, Tuple
 import zipfile
 import tempfile
-from app import MODEL_LIST
+from config import MODEL_LIST, MODEL_ZIP_PATH, FEATURE_FILE, PERFORMANCE_FILE
 
 def load_models(model_zip_path):
     """
