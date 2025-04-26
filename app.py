@@ -29,11 +29,13 @@ if 'answers' not in st.session_state:
 if 'analysis_results' not in st.session_state:
     st.session_state.analysis_results = None
 
-# Soruları yükle
+# Soruları yükle ve kolon adlarını temizle
 @st.cache_data
 def load_questions():
     try:
-        return pd.read_csv('SorularFull.csv', sep=';', encoding='windows-1254')
+        df = pd.read_csv('SorularFull.csv', sep=';', encoding='windows-1254')
+        df.columns = df.columns.str.strip()
+        return df
     except Exception as e:
         st.error(f"Soru dosyası okuma hatası: {e}")
         return None
@@ -55,7 +57,7 @@ def prepare_input_data(answers):
 def analyze_answers(answers, models, questions_df):
     input_data = prepare_input_data(answers)
     total_positive = 0
-    for name, model in models.items():
+    for _, model in models.items():
         try:
             total_positive += model.predict(input_data)[0]
         except Exception:
@@ -70,6 +72,9 @@ def show_home_page():
     if questions_df is None:
         st.stop()
 
+    # Id ve metin kolonlarını otomatik tespit et
+    qid_col, qtext_col = questions_df.columns[0], questions_df.columns[1]
+
     # 1) Hızlı Cevap: sadece rastgele doldur
     if st.button("🎲 Hızlı Cevap"):
         for q in QUESTION_IDS:
@@ -78,8 +83,8 @@ def show_home_page():
 
     # Soruları göster ve manuel doldurma
     for q in QUESTION_IDS:
-        text = questions_df.loc[questions_df['Soru no'] == q, 'Soru'].values
-        question = text[0] if len(text) else q
+        matched = questions_df[questions_df[qid_col] == q]
+        question = matched[qtext_col].values[0] if not matched.empty else q
         col1, col2 = st.columns([4, 1])
         with col1:
             st.write(f"{q}: {question}")
