@@ -19,8 +19,19 @@ st.title("Çocuk Gelişimi Değerlendirme Sistemi")
 # Soruları yükle
 @st.cache_data
 def load_questions():
-    df = pd.read_csv('SorularFull.csv', sep=';')
-    return df
+    try:
+        # Farklı encoding'leri dene
+        encodings = ['windows-1254','cp1254', 'iso-8859-9', 'latin1', 'utf-8-sig']
+        for encoding in encodings:
+            try:
+                df = pd.read_csv('SorularFull.csv', sep=';', encoding=encoding)
+                return df
+            except UnicodeDecodeError:
+                continue
+        raise Exception("Dosya hiçbir encoding ile okunamadı!")
+    except Exception as e:
+        st.error(f"Soru dosyası okuma hatası: {str(e)}")
+        return None
 
 # Modelleri yükle
 @st.cache_resource
@@ -32,11 +43,15 @@ def load_models():
         models[model_name] = joblib.load(model_file)
     return models
 
+# Soruları yükle
+questions_df = load_questions()
+if questions_df is None:
+    st.stop()
+
 try:
-    questions_df = load_questions()
     models = load_models()
 except Exception as e:
-    st.error(f"Dosya yükleme hatası: {str(e)}")
+    st.error(f"Model yükleme hatası: {str(e)}")
     st.stop()
 
 # Soru listesi
@@ -61,7 +76,11 @@ if st.button("🎲 Hızlı Cevap"):
 
 # Soruları göster
 for q in QUESTION_IDS:
-    question_text = questions_df[questions_df['Soru no'] == q]['Soru'].values[0] if len(questions_df[questions_df['Soru no'] == q]) > 0 else q
+    try:
+        question_text = questions_df[questions_df['Soru no'] == q]['Soru'].values[0] if len(questions_df[questions_df['Soru no'] == q]) > 0 else q
+    except:
+        question_text = q
+    
     col1, col2 = st.columns([3, 1])
     with col1:
         st.write(f"{q}: {question_text}")
