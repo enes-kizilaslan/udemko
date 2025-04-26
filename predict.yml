@@ -1,0 +1,43 @@
+name: On‐Demand Predict
+
+on:
+  workflow_dispatch:
+    inputs:
+      responses:
+        description: 'JSON‐encoded responses'
+        required: true
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Write input.json
+        run: |
+          echo "${{ github.event.inputs.responses }}" > model_exports/input.json
+
+      - name: Run predict
+        run: |
+          python pages/predict.py
+
+      - name: Commit & push output.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add model_exports/output.json
+          git commit -m "Auto-update output.json"
+          git push
+        env:
+          # GITHUB_TOKEN otomatik verilir
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
