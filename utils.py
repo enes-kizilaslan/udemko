@@ -7,7 +7,7 @@ import zipfile
 import tempfile
 from config import MODEL_LIST, MODEL_ZIP_PATH, FEATURE_FILE, PERFORMANCE_FILE
 
-def load_models(model_zip_path):
+def load_models(model_zip_path: str = MODEL_ZIP_PATH) -> Dict:
     """
     Zip dosyasından modelleri yükler
     """
@@ -34,7 +34,7 @@ def load_models(model_zip_path):
     
     return models
 
-def load_feature_lists(feature_file):
+def load_feature_lists(feature_file: str = FEATURE_FILE) -> Dict[str, List[str]]:
     """
     Excel dosyasından özellik listelerini yükler
     """
@@ -46,7 +46,7 @@ def load_feature_lists(feature_file):
     
     return feature_lists
 
-def load_model_performances(performance_file):
+def load_model_performances(performance_file: str = PERFORMANCE_FILE) -> Dict[str, float]:
     """
     Excel dosyasından model performanslarını yükler
     """
@@ -59,24 +59,25 @@ def load_model_performances(performance_file):
     
     return performances
 
-def prepare_input_data(answers, feature_lists):
+def prepare_input_data(answers: Dict[str, int], feature_lists: Dict[str, List[str]]) -> Dict[str, np.ndarray]:
     """
     Kullanıcı cevaplarını model girişi için hazırlar
     """
     input_data = {}
     
     for category, features in feature_lists.items():
-        category_data = []
-        for feature in features:
-            if feature in answers:
-                category_data.append(answers[feature])
-            else:
-                category_data.append(0)  # Varsayılan değer
-        input_data[category] = np.array(category_data).reshape(1, -1)
+        if category != 'all_features':  # all_features kategorisini atla
+            category_data = []
+            for feature in features:
+                if feature in answers:
+                    category_data.append(answers[feature])
+                else:
+                    category_data.append(0)  # Varsayılan değer
+            input_data[category] = np.array(category_data).reshape(1, -1)
     
     return input_data
 
-def make_predictions(models, input_data, performances):
+def make_predictions(models: Dict, input_data: Dict[str, np.ndarray], performances: Dict[str, float]) -> Dict[str, Dict]:
     """
     Tüm modeller için tahmin yapar ve ağırlıklı sonuçları döndürür
     """

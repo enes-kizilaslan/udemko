@@ -55,9 +55,9 @@ def main():
     
     try:
         # Modelleri ve gerekli dosyaları yükle
-        models = load_models(MODEL_ZIP_PATH)
-        feature_lists = load_feature_lists(FEATURE_FILE)
-        performances = load_model_performances(PERFORMANCE_FILE)
+        models = load_models()
+        feature_lists = load_feature_lists()
+        performances = load_model_performances()
         
         # Kullanıcı girişi için form oluştur
         with st.form("user_form"):
