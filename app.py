@@ -10,12 +10,6 @@ Original file is located at
 import streamlit as st
 import pandas as pd
 import numpy as np
-import glob
-from joblib import load
-import random
-import time
-import os
-import zipfile
 from utils import load_models, load_feature_lists, load_model_performances, prepare_input_data, make_predictions
 
 # Model listesi
@@ -28,6 +22,11 @@ MODEL_LIST = [
     'AdaBoost_7_Ozgul', 'LogisticRegression_7_Ozgul', 'RandomForest_7_Ozgul', 'XGBoost_7_Ozgul',
     'AdaBoost_7_Zihinsel', 'LogisticRegression_7_Zihinsel', 'RandomForest_7_Zihinsel', 'XGBoost_7_Zihinsel'
 ]
+
+# Dosya yolları
+MODEL_ZIP_PATH = "models.zip"
+FEATURE_FILE = "selected_features.xlsx"
+PERFORMANCE_FILE = "model_performance.xlsx"
 
 # Sayfa yapılandırması
 st.set_page_config(
@@ -66,104 +65,63 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Başlık
-st.title("🧠 Nörogelişimsel Bozukluk Tarama Sistemi")
-
-# Session state başlatma
-if 'models' not in st.session_state:
+def main():
+    st.title("🧠 Nörogelişimsel Bozukluk Tarama Sistemi")
+    
     try:
-        st.session_state.models = load_models()
-        st.session_state.feature_lists = load_feature_lists()
-        st.session_state.performances = load_model_performances()
-        st.session_state.questions_df = pd.read_csv("cevaplar600.csv")
-    except Exception as e:
-        st.error(f"Dosyalar yüklenirken hata oluştu: {str(e)}")
-        st.stop()
-
-# Yan panel - Kullanım bilgileri
-with st.sidebar:
-    st.header("📋 Kullanım Bilgileri")
-    st.markdown("""
-    1. Soruları dikkatlice okuyun
-    2. Her soru için en uygun cevabı seçin
-    3. Tüm soruları yanıtladıktan sonra 'Değerlendir' butonuna tıklayın
-    4. Sistem size risk değerlendirmesini gösterecektir
-    
-    **Not:** Bu sistem bir ön değerlendirme aracıdır ve kesin tanı koyamaz. 
-    Mutlaka bir uzmana danışınız.
-    """)
-    
-    st.markdown("---")
-    st.markdown("### 🎯 Risk Seviyeleri")
-    st.markdown("""
-    - 🔴 Yüksek Risk: > 75%
-    - 🟡 Orta Risk: 50-75%
-    - 🟢 Düşük Risk: < 50%
-    """)
-
-# Ana panel - Sorular
-st.header("📝 Değerlendirme Formu")
-
-# Soruları göster
-user_answers = {}
-for _, row in st.session_state.questions_df.iterrows():
-    question_id = row['ID']
-    question_text = row['Soru']
-    
-    # Her soru için radio buton oluştur
-    answer = st.radio(
-        f"**{question_id}. {question_text}**",
-        options=["Hiçbir Zaman", "Bazen", "Sık Sık", "Her Zaman"],
-        horizontal=True,
-        key=f"q_{question_id}"
-    )
-    
-    # Cevabı sayısal değere çevir
-    user_answers[question_id] = {"Hiçbir Zaman": 0, "Bazen": 1, "Sık Sık": 2, "Her Zaman": 3}[answer]
-    
-    st.markdown("---")
-
-# Değerlendirme butonu
-if st.button("💫 Değerlendir", type="primary"):
-    with st.spinner("Değerlendirme yapılıyor..."):
-        try:
-            # Verileri hazırla ve tahmin yap
-            prepared_data = prepare_input_data(user_answers, st.session_state.feature_lists)
-            predictions = make_predictions(
-                st.session_state.models,
-                prepared_data,
-                st.session_state.performances
-            )
+        # Modelleri ve gerekli dosyaları yükle
+        models = load_models(MODEL_ZIP_PATH)
+        feature_lists = load_feature_lists(FEATURE_FILE)
+        performances = load_model_performances(PERFORMANCE_FILE)
+        
+        # Kullanıcı girişi için form oluştur
+        with st.form("user_form"):
+            user_answers = {}
             
-            # Sonuçları göster
-            st.header("🎯 Değerlendirme Sonuçları")
+            # Her kategori için soruları göster
+            for category, features in feature_lists.items():
+                if category != 'all_features':  # all_features kategorisini atla
+                    st.subheader(f"{category} Kategorisi")
+                    for feature in features:
+                        user_answers[feature] = st.radio(
+                            feature,
+                            options=[0, 1],
+                            format_func=lambda x: "Evet" if x == 1 else "Hayır"
+                        )
             
-            for disease, prob in predictions.items():
-                # Risk seviyesini belirle
-                if prob > 0.75:
-                    risk_class = "high-risk"
-                    risk_text = "Yüksek Risk 🔴"
-                elif prob > 0.50:
-                    risk_class = "medium-risk"
-                    risk_text = "Orta Risk 🟡"
-                else:
-                    risk_class = "low-risk"
-                    risk_text = "Düşük Risk 🟢"
+            submit_button = st.form_submit_button("Tahmin Yap")
+            
+            if submit_button:
+                # Verileri hazırla ve tahmin yap
+                input_data = prepare_input_data(user_answers, feature_lists)
+                results = make_predictions(models, input_data, performances)
                 
-                # Sonucu göster
-                st.markdown(f"""
-                <div class="{risk_class} result-box">
-                    <h3>{disease}</h3>
-                    <p><b>Risk Seviyesi:</b> {risk_text}</p>
-                    <p><b>Risk Oranı:</b> {prob:.1%}</p>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            # Uyarı notu
-            st.warning("""
-            ⚠️ **Önemli Not:** Bu sonuçlar sadece bir ön değerlendirmedir ve kesin tanı yerine geçmez. 
-            Lütfen detaylı değerlendirme için bir uzmana başvurunuz.
-            """)
-            
-        except Exception as e:
-            st.error(f"Değerlendirme sırasında bir hata oluştu: {str(e)}")
+                # Sonuçları göster
+                st.header("Sonuçlar")
+                for category, result in results.items():
+                    prob = result['probability'] * 100
+                    prediction = "Pozitif" if result['prediction'] == 1 else "Negatif"
+                    
+                    # Risk seviyesine göre stil belirleme
+                    if prob >= 70:
+                        box_class = "high-risk"
+                    elif prob >= 30:
+                        box_class = "medium-risk"
+                    else:
+                        box_class = "low-risk"
+                    
+                    # Sonuçları özel stil ile göster
+                    st.markdown(f"""
+                    <div class="result-box {box_class}">
+                        <h3>{category}</h3>
+                        <p>Tahmin: {prediction}</p>
+                        <p>Olasılık: {prob:.2f}%</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                
+    except Exception as e:
+        st.error(f"Bir hata oluştu: {str(e)}")
+        st.error("Lütfen tüm gerekli dosyaların (models.zip, selected_features.xlsx, model_performance.xlsx) mevcut olduğundan emin olun.")
+
+if __name__ == "__main__":
+    main()
