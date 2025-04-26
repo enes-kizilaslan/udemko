@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import os
 import random
 from pathlib import Path
 
@@ -34,10 +33,9 @@ if 'analysis_results' not in st.session_state:
 @st.cache_data
 def load_questions():
     try:
-        df = pd.read_csv('SorularFull.csv', sep=';', encoding='windows-1254')
-        return df
+        return pd.read_csv('SorularFull.csv', sep=';', encoding='windows-1254')
     except Exception as e:
-        st.error(f"Soru dosyası okuma hatası: {str(e)}")
+        st.error(f"Soru dosyası okuma hatası: {e}")
         return None
 
 # Modelleri yükle
@@ -55,40 +53,63 @@ def prepare_input_data(answers):
 
 # Analiz fonksiyonu
 def analyze_answers(answers, models, questions_df):
-    # Basit örnek: sadece her modelin sonucunu topla
     input_data = prepare_input_data(answers)
     total_positive = 0
-    for model_name, model in models.items():
+    for name, model in models.items():
         try:
-            pred = model.predict(input_data)[0]
-            total_positive += pred
+            total_positive += model.predict(input_data)[0]
         except:
             continue
     return {'total_positive': total_positive, 'total_models': len(models)}
 
 # Ana sayfa
-def show_home_page():
-    st.title("🎲 Rastgele Cevap Atama")
-    if st.button("🎲 Hızlı Cevap ve Analiz"):
-        # Rasgele cevap ata
+ def show_home_page():
+    st.title("Çocuk Gelişimi Değerlendirme Sistemi")
+
+    questions_df = load_questions()
+    if questions_df is None:
+        st.stop()
+
+    # 1) Hızlı Cevap: sadece rastgele doldur
+    if st.button("🎲 Hızlı Cevap"):
         for q in QUESTION_IDS:
-            st.session_state.answers[q] = random.choice(['Evet', 'Hayır'])
-        # Analiz sayfasına yönlendir
+            st.session_state.answers[q] = random.choice(["Evet", "Hayır"])
+        st.experimental_rerun()
+
+    # Soruları göster ve manuel doldurma
+    for q in QUESTION_IDS:
+        text = questions_df.loc[questions_df['Soru no'] == q, 'Soru'].values
+        question = text[0] if len(text) else q
+        col1, col2 = st.columns([4,1])
+        with col1:
+            st.write(f"{q}: {question}")
+        with col2:
+            current = st.session_state.answers.get(q, None)
+            idx = 0 if current == "Evet" else 1 if current == "Hayır" else 0
+            st.session_state.answers[q] = st.radio(
+                "",
+                options=["Evet", "Hayır"],
+                index=idx,
+                key=f"radio_{q}",
+                horizontal=True,
+                label_visibility="collapsed"
+            )
+
+    # 2) Analiz Et: mevcut cevaplarla analiz sayfasına geç
+    if st.button("🔍 Analiz Et"):
         st.session_state.page = 'analyzing'
         st.experimental_rerun()
-    st.write("Butona tıklayınca tüm sorular otomatik olarak 'Evet' veya 'Hayır' olarak yanıtlanır ve analiz yapılır.")
 
 # Analiz sayfası
 def show_analyzing_page():
     st.title("Analiz Yapılıyor...")
-    my_bar = st.progress(0)
+    bar = st.progress(0)
     try:
-        questions_df = load_questions()
+        qdf = load_questions()
         models = load_models()
-        results = analyze_answers(st.session_state.answers, models, questions_df)
-        st.session_state.analysis_results = results
-        for i in range(100):
-            my_bar.progress(i + 1)
+        res = analyze_answers(st.session_state.answers, models, qdf)
+        st.session_state.analysis_results = res
+        for i in range(100): bar.progress(i+1)
         st.session_state.page = 'results'
         st.experimental_rerun()
     except Exception as e:
@@ -105,18 +126,18 @@ def show_results_page():
         st.error("Sonuç bulunamadı")
         return
     st.write(f"Toplam Model Sayısı: {res['total_models']}")
-    st.write(f"Pozitif (1) Tahmin Sayısı: {res['total_positive']}")
-    st.write(f"Negatif (0) Tahmin Sayısı: {res['total_models'] - res['total_positive']}")
-    if st.button("🔄 Yeni Rastgele Analiz"):  # başa dön
+    st.write(f"Pozitif Tahmin Sayısı: {res['total_positive']}")
+    st.write(f"Negatif Tahmin Sayısı: {res['total_models'] - res['total_positive']}")
+    if st.button("🔄 Yeni Test"):  
         st.session_state.answers = {}
         st.session_state.analysis_results = None
         st.session_state.page = 'home'
         st.experimental_rerun()
 
-# Yönlendirme
+# Sayfa yönlendirmesi
 if st.session_state.page == 'home':
     show_home_page()
 elif st.session_state.page == 'analyzing':
     show_analyzing_page()
-elif st.session_state.page == 'results':
+else:
     show_results_page()
