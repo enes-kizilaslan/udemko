@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import joblib
+import pickle
 import random
 from pathlib import Path
 
@@ -31,32 +31,23 @@ if 'analysis_results' not in st.session_state:
 
 # Soruları yükle ve kolon adlarını temizle
 @st.cache_data
-\
 def load_questions():
-\
     try:
-\
-        # Otomatik ayraç algılama: noktalı virgül ya da virgül olsun
-\
         df = pd.read_csv('SorularFull.csv', sep=None, engine='python', encoding='windows-1254')
-\
         df.columns = df.columns.str.strip()
-\
         return df
-\
     except Exception as e:
-\
         st.error(f"Soru dosyası okuma hatası: {e}")
-\
         return None
 
-# Modelleri yükle
+# Modelleri yükle (pickle .pkl dosyaları için)
 @st.cache_resource
 def load_models():
     models_dir = Path("models")
     models = {}
     for model_file in models_dir.glob("*.pkl"):
-        models[model_file.stem] = joblib.load(model_file)
+        with open(model_file, 'rb') as f:
+            models[model_file.stem] = pickle.load(f)
     return models
 
 # Girdi hazırlama
@@ -67,7 +58,7 @@ def prepare_input_data(answers):
 def analyze_answers(answers, models, questions_df):
     input_data = prepare_input_data(answers)
     total_positive = 0
-    for _, model in models.items():
+    for model in models.values():
         try:
             total_positive += model.predict(input_data)[0]
         except Exception:
@@ -83,7 +74,9 @@ def show_home_page():
         st.stop()
 
     # Id ve metin kolonlarını otomatik tespit et
-    qid_col, qtext_col = questions_df.columns[0], questions_df.columns[1]
+    cols = list(questions_df.columns)
+    qid_col = cols[0]
+    qtext_col = cols[1] if len(cols) > 1 else cols[0]
 
     # 1) Hızlı Cevap: sadece rastgele doldur
     if st.button("🎲 Hızlı Cevap"):
