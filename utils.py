@@ -3,147 +3,107 @@ import joblib
 import pandas as pd
 import numpy as np
 from typing import Dict, List, Tuple
+import zipfile
+import tempfile
+from app import MODEL_LIST
 
-def load_models(model_dir: str = "models") -> Dict[str, object]:
+def load_models(model_zip_path):
     """
-    Belirtilen dizindeki tüm model dosyalarını yükler.
-    
-    Args:
-        model_dir: Model dosyalarının bulunduğu dizin
-    
-    Returns:
-        Yüklenen modellerin sözlüğü {model_adı: model_nesnesi}
+    Zip dosyasından modelleri yükler
     """
+    if not os.path.exists(model_zip_path):
+        raise FileNotFoundError(f"Model zip dosyası bulunamadı: {model_zip_path}")
+
     models = {}
-    if not os.path.exists(model_dir):
-        raise FileNotFoundError(f"{model_dir} dizini bulunamadı!")
-        
-    for model_file in os.listdir(model_dir):
-        if model_file.endswith('.pkl'):
-            model_path = os.path.join(model_dir, model_file)
-            try:
-                model = joblib.load(model_path)
-                models[model_file] = model
-            except Exception as e:
-                print(f"Hata: {model_file} yüklenirken hata oluştu: {str(e)}")
-                continue
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            with zipfile.ZipFile(model_zip_path, 'r') as zip_ref:
+                zip_ref.extractall(temp_dir)
+                
+            for model_name in MODEL_LIST:
+                model_path = os.path.join(temp_dir, f"{model_name}.joblib")
+                if os.path.exists(model_path):
+                    models[model_name] = joblib.load(model_path)
+                else:
+                    print(f"Uyarı: {model_name}.joblib dosyası zip içinde bulunamadı")
+        except Exception as e:
+            raise Exception(f"Model yükleme hatası: {str(e)}")
     
     if not models:
-        raise ValueError("Hiçbir model yüklenemedi!")
+        raise Exception("Hiçbir model yüklenemedi!")
     
     return models
 
-def load_feature_lists(excel_file: str = "selected_features.xlsx") -> Dict[str, List[str]]:
+def load_feature_lists(feature_file):
     """
-    Excel dosyasından özellik listelerini yükler.
-    
-    Args:
-        excel_file: Özellik listelerini içeren Excel dosyası
-    
-    Returns:
-        Özellik listelerinin sözlüğü {sayfa_adı: [özellikler]}
+    Excel dosyasından özellik listelerini yükler
     """
-    if not os.path.exists(excel_file):
-        raise FileNotFoundError(f"{excel_file} dosyası bulunamadı!")
-        
     feature_lists = {}
-    excel = pd.ExcelFile(excel_file)
+    df = pd.read_excel(feature_file, sheet_name=None)
     
-    for sheet_name in excel.sheet_names:
-        df = pd.read_excel(excel, sheet_name=sheet_name)
-        features = df['Feature'].tolist() if 'Feature' in df.columns else df.columns.tolist()
-        feature_lists[sheet_name] = features
+    for sheet_name in df.keys():
+        feature_lists[sheet_name] = df[sheet_name]['Features'].tolist()
     
     return feature_lists
 
-def load_model_performances(excel_file: str = "model_performance.xlsx") -> pd.DataFrame:
+def load_model_performances(performance_file):
     """
-    Model performans metriklerini yükler.
-    
-    Args:
-        excel_file: Model performanslarını içeren Excel dosyası
-    
-    Returns:
-        Model performanslarını içeren DataFrame
+    Excel dosyasından model performanslarını yükler
     """
-    if not os.path.exists(excel_file):
-        raise FileNotFoundError(f"{excel_file} dosyası bulunamadı!")
-        
-    return pd.read_excel(excel_file)
+    performances = {}
+    df = pd.read_excel(performance_file)
+    
+    for _, row in df.iterrows():
+        model_name = row['Model']
+        performances[model_name] = row['F1_Score']
+    
+    return performances
 
-def prepare_input_data(user_answers: Dict[str, int], feature_lists: Dict[str, List[str]]) -> Dict[str, pd.DataFrame]:
+def prepare_input_data(answers, feature_lists):
     """
-    Kullanıcı cevaplarını model girişi için hazırlar.
-    
-    Args:
-        user_answers: Kullanıcı cevapları {soru_id: cevap}
-        feature_lists: Her model için özellik listeleri
-    
-    Returns:
-        Her model için hazırlanmış giriş verileri
+    Kullanıcı cevaplarını model girişi için hazırlar
     """
-    prepared_data = {}
+    input_data = {}
     
-    for sheet_name, features in feature_lists.items():
-        data = {}
+    for category, features in feature_lists.items():
+        category_data = []
         for feature in features:
-            if feature in user_answers:
-                data[feature] = [user_answers[feature]]
+            if feature in answers:
+                category_data.append(answers[feature])
             else:
-                print(f"Uyarı: {feature} özelliği kullanıcı cevaplarında bulunamadı!")
-                data[feature] = [0]  # Varsayılan değer
-                
-        prepared_data[sheet_name] = pd.DataFrame(data)
+                category_data.append(0)  # Varsayılan değer
+        input_data[category] = np.array(category_data).reshape(1, -1)
     
-    return prepared_data
+    return input_data
 
-def make_predictions(models: Dict[str, object], 
-                    prepared_data: Dict[str, pd.DataFrame],
-                    performances: pd.DataFrame) -> Dict[str, float]:
+def make_predictions(models, input_data, performances):
     """
-    Tüm modeller için tahmin yapar ve sonuçları birleştirir.
-    
-    Args:
-        models: Yüklenmiş modeller
-        prepared_data: Hazırlanmış giriş verileri
-        performances: Model performans metrikleri
-    
-    Returns:
-        Her hastalık için tahmin olasılıkları
+    Tüm modeller için tahmin yapar ve ağırlıklı sonuçları döndürür
     """
-    predictions = {}
+    results = {}
     
-    for model_file, model in models.items():
-        try:
-            # Model adından hastalık ve özellik sayısını çıkar
-            parts = model_file.replace('.pkl', '').split('_')
-            disease = '_'.join(parts[2:]) if len(parts) > 2 else parts[-1]
-            feature_count = parts[1]
-            
-            # İlgili veri setini al
-            data = prepared_data.get(f"{feature_count}_{disease}")
-            if data is None:
-                continue
+    for category in input_data.keys():
+        category_predictions = []
+        category_weights = []
+        
+        for model_name, model in models.items():
+            if category in model_name:
+                prediction = model.predict_proba(input_data[category])[0]
+                weight = performances.get(model_name, 1.0)
                 
-            # Tahmin yap
-            if hasattr(model, 'predict_proba'):
-                prob = model.predict_proba(data)[0][1]
-            else:
-                prob = float(model.predict(data)[0])
+                category_predictions.append(prediction)
+                category_weights.append(weight)
+        
+        if category_predictions:
+            # Ağırlıklı ortalama hesaplama
+            category_predictions = np.array(category_predictions)
+            category_weights = np.array(category_weights)
+            weighted_pred = np.average(category_predictions, weights=category_weights, axis=0)
             
-            # Hastalık bazında tahminleri topla
-            if disease not in predictions:
-                predictions[disease] = []
-            predictions[disease].append(prob)
-            
-        except Exception as e:
-            print(f"Hata: {model_file} ile tahmin yapılırken hata oluştu: {str(e)}")
-            continue
+            # Sonuçları kaydet
+            results[category] = {
+                'probability': weighted_pred[1],  # Pozitif sınıf olasılığı
+                'prediction': 1 if weighted_pred[1] >= 0.5 else 0
+            }
     
-    # Her hastalık için ortalama tahmin hesapla
-    final_predictions = {}
-    for disease, probs in predictions.items():
-        if probs:
-            final_predictions[disease] = np.mean(probs)
-    
-    return final_predictions 
+    return results 
