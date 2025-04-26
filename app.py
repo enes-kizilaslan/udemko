@@ -31,13 +31,23 @@ if 'analysis_results' not in st.session_state:
 
 # Soruları yükle ve kolon adlarını temizle
 @st.cache_data
+\
 def load_questions():
+\
     try:
-        df = pd.read_csv('SorularFull.csv', sep=';', encoding='windows-1254')
+\
+        # Otomatik ayraç algılama: noktalı virgül ya da virgül olsun
+\
+        df = pd.read_csv('SorularFull.csv', sep=None, engine='python', encoding='windows-1254')
+\
         df.columns = df.columns.str.strip()
+\
         return df
+\
     except Exception as e:
+\
         st.error(f"Soru dosyası okuma hatası: {e}")
+\
         return None
 
 # Modelleri yükle
