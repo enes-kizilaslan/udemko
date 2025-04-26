@@ -2,35 +2,38 @@ import os
 import joblib
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 import zipfile
 import tempfile
 from config import MODEL_LIST, MODEL_ZIP_PATH, FEATURE_FILE, PERFORMANCE_FILE
 
-def load_models(model_zip_path: str = MODEL_ZIP_PATH) -> Dict:
+def load_models() -> Dict[str, Any]:
     """
-    Zip dosyasından modelleri yükler
+    Zip dosyasından modelleri yükler.
     """
-    if not os.path.exists(model_zip_path):
-        raise FileNotFoundError(f"Model zip dosyası bulunamadı: {model_zip_path}")
-
+    if not os.path.exists(MODEL_ZIP_PATH):
+        raise FileNotFoundError(f"Model zip dosyası bulunamadı: {MODEL_ZIP_PATH}")
+    
     models = {}
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
-            with zipfile.ZipFile(model_zip_path, 'r') as zip_ref:
+            with zipfile.ZipFile(MODEL_ZIP_PATH, 'r') as zip_ref:
                 zip_ref.extractall(temp_dir)
                 
+            loaded_models = 0
             for model_name in MODEL_LIST:
-                model_path = os.path.join(temp_dir, f"{model_name}.joblib")
+                model_path = os.path.join(temp_dir, f"{model_name}.pkl")
                 if os.path.exists(model_path):
                     models[model_name] = joblib.load(model_path)
+                    loaded_models += 1
                 else:
-                    print(f"Uyarı: {model_name}.joblib dosyası zip içinde bulunamadı")
+                    print(f"Uyarı: {model_name}.pkl dosyası bulunamadı")
+            
+            if loaded_models == 0:
+                raise Exception("Hiçbir model yüklenemedi!")
+                
         except Exception as e:
-            raise Exception(f"Model yükleme hatası: {str(e)}")
-    
-    if not models:
-        raise Exception("Hiçbir model yüklenemedi!")
+            raise Exception(f"Modeller yüklenirken hata oluştu: {str(e)}")
     
     return models
 
