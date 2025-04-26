@@ -58,12 +58,12 @@ def analyze_answers(answers, models, questions_df):
     for name, model in models.items():
         try:
             total_positive += model.predict(input_data)[0]
-        except:
+        except Exception:
             continue
     return {'total_positive': total_positive, 'total_models': len(models)}
 
 # Ana sayfa
- def show_home_page():
+def show_home_page():
     st.title("Çocuk Gelişimi Değerlendirme Sistemi")
 
     questions_df = load_questions()
@@ -80,11 +80,11 @@ def analyze_answers(answers, models, questions_df):
     for q in QUESTION_IDS:
         text = questions_df.loc[questions_df['Soru no'] == q, 'Soru'].values
         question = text[0] if len(text) else q
-        col1, col2 = st.columns([4,1])
+        col1, col2 = st.columns([4, 1])
         with col1:
             st.write(f"{q}: {question}")
         with col2:
-            current = st.session_state.answers.get(q, None)
+            current = st.session_state.answers.get(q)
             idx = 0 if current == "Evet" else 1 if current == "Hayır" else 0
             st.session_state.answers[q] = st.radio(
                 "",
@@ -109,7 +109,8 @@ def show_analyzing_page():
         models = load_models()
         res = analyze_answers(st.session_state.answers, models, qdf)
         st.session_state.analysis_results = res
-        for i in range(100): bar.progress(i+1)
+        for i in range(100):
+            bar.progress(i + 1)
         st.session_state.page = 'results'
         st.experimental_rerun()
     except Exception as e:
@@ -128,7 +129,7 @@ def show_results_page():
     st.write(f"Toplam Model Sayısı: {res['total_models']}")
     st.write(f"Pozitif Tahmin Sayısı: {res['total_positive']}")
     st.write(f"Negatif Tahmin Sayısı: {res['total_models'] - res['total_positive']}")
-    if st.button("🔄 Yeni Test"):  
+    if st.button("🔄 Yeni Test"):
         st.session_state.answers = {}
         st.session_state.analysis_results = None
         st.session_state.page = 'home'
